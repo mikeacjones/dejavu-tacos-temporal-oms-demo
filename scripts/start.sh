@@ -11,7 +11,6 @@ set -e
 
 LANG="${1:-python}"
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SESSION="dejavu-tacos"
 MISSING=()
 
 # ── Check Temporal CLI (always required) ──
@@ -21,7 +20,6 @@ command -v temporal >/dev/null 2>&1 || MISSING+=("temporal CLI  — brew install
 if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
   MODE="docker"
 else
-  # Local mode — need uv + node
   command -v uv >/dev/null 2>&1 || MISSING+=("uv           — https://docs.astral.sh/uv/")
   command -v npm >/dev/null 2>&1 || MISSING+=("node/npm     — https://nodejs.org/")
   MODE="local"
@@ -64,46 +62,45 @@ case "$LANG" in
 esac
 
 cd "$ROOT_DIR"
+PIDS=()
 
-# ═══════════════════════════════════════════
-#  Docker mode
+cleanup() {
+  echo ""
+  echo "Shutting down..."
+  if [ "$MODE" = "docker" ]; then
+    docker compose down 2>/dev/null || true
+  fi
+  for pid in "${PIDS[@]}"; do
+    kill "$pid" 2>/dev/null || true
+  done
+  wait 2>/dev/null
+  echo "Done."
+  exit 0
+}
+trap cleanup SIGINT SIGTERM
+
+echo "======================================"
+echo "  🌮 Déjà Vu Tacos Demo Launcher"
+echo "======================================"
+echo ""
+
+# ── Start Temporal dev server (always on host) ──
+echo "Starting Temporal dev server..."
+temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn &
+PIDS+=($!)
+
+echo "Waiting for Temporal..."
+for i in $(seq 1 15); do
+  if temporal operator namespace describe default >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
 # ═══════════════════════════════════════════
 if [ "$MODE" = "docker" ]; then
+# ═══════════════════════════════════════════
 
-  PIDS=()
-  cleanup() {
-    echo ""
-    echo "Shutting down..."
-    docker compose down 2>/dev/null || true
-    for pid in "${PIDS[@]}"; do
-      kill "$pid" 2>/dev/null || true
-    done
-    wait 2>/dev/null
-    echo "Done."
-    exit 0
-  }
-  trap cleanup SIGINT SIGTERM
-
-  echo "======================================"
-  echo "  🌮 Déjà Vu Tacos (Docker mode)"
-  echo "======================================"
-  echo ""
-
-  # Start Temporal dev server on host
-  echo "Starting Temporal dev server..."
-  temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn &
-  PIDS+=($!)
-
-  # Wait for Temporal to be ready
-  echo "Waiting for Temporal..."
-  for i in $(seq 1 15); do
-    if temporal operator namespace describe default >/dev/null 2>&1; then
-      break
-    fi
-    sleep 1
-  done
-
-  # Build and start containers
   echo "Starting Docker containers..."
   docker compose up --build -d
 
@@ -117,139 +114,52 @@ if [ "$MODE" = "docker" ]; then
   echo ""
   echo "  Ctrl+C to stop everything"
   echo ""
-  echo "  Logs:  docker compose logs -f"
-  echo "         docker compose logs -f worker-python"
-  echo "  Recovery demo:"
-  echo "         docker compose restart worker-python"
+  echo "  docker compose logs -f worker-python"
+  echo "  docker compose restart worker-python"
   echo "======================================"
 
-  # Wait quietly — Ctrl+C triggers cleanup
+  # Wait quietly
   while true; do sleep 1; done
 
 # ═══════════════════════════════════════════
-#  Local mode (tmux or background processes)
-# ═══════════════════════════════════════════
 else
+# ═══════════════════════════════════════════
 
-  # Install deps
   echo "Installing dependencies..."
   uv sync --quiet 2>/dev/null || uv sync
   (cd frontend && npm install --silent 2>/dev/null) || (cd frontend && npm install)
 
-  if command -v tmux >/dev/null 2>&1; then
-    # ━━━ tmux mode ━━━
-    tmux kill-session -t "$SESSION" 2>/dev/null || true
+  echo "Starting backend..."
+  uv run --package dejavu-tacos-backend server &
+  PIDS+=($!)
 
-    # Create session with first pane: Temporal Server
-    tmux new-session -d -s "$SESSION" -n "demo"
-    tmux send-keys -t "${SESSION}:demo.0" \
-      "cd $ROOT_DIR && echo '🌮 Temporal Server' && temporal server start-dev --db-filename $ROOT_DIR/temporal.db --log-level warn" Enter
-
-    # Pane 1 (right of 0): Backend
-    tmux split-window -h -t "${SESSION}:demo.0"
-    tmux send-keys -t "${SESSION}:demo.1" \
-      "cd $ROOT_DIR && sleep 2 && echo '🌮 Backend (API)' && uv run --package dejavu-tacos-backend server" Enter
-
-    # Pane 2 (below 0): Worker
-    tmux split-window -v -t "${SESSION}:demo.0"
-    tmux send-keys -t "${SESSION}:demo.2" \
-      "cd $ROOT_DIR && sleep 3 && echo '🌮 Worker ($WORKER_LABEL)' && $WORKER_CMD" Enter
-
-    # Pane 3 (below 1): Frontend
-    tmux split-window -v -t "${SESSION}:demo.1"
-    tmux send-keys -t "${SESSION}:demo.3" \
-      "cd $ROOT_DIR/frontend && sleep 4 && echo '🌮 Frontend' && npm run dev -- --open" Enter
-
-    # Even out the layout
-    tmux select-layout -t "${SESSION}:demo" tiled
-
-    echo ""
-    echo "======================================"
-    echo "  🌮 Déjà Vu Tacos (tmux mode)"
-    echo ""
-    echo "  Worker:     $WORKER_LABEL"
-    echo "  App:        http://localhost:5173"
-    echo "  API:        http://localhost:8000"
-    echo "  Temporal:   http://localhost:8233"
-    echo ""
-    echo "  Ctrl+B D to detach"
-    echo "  Ctrl+C in worker pane to demo recovery"
-    echo "======================================"
-
-    # If already inside tmux, switch; otherwise attach
-    if [ -n "$TMUX" ]; then
-      tmux switch-client -t "$SESSION"
-    else
-      tmux attach -t "$SESSION"
+  echo "Waiting for backend..."
+  for i in $(seq 1 15); do
+    if curl -s http://localhost:8000/api/health >/dev/null 2>&1; then
+      break
     fi
+    sleep 1
+  done
 
-  else
-    # ━━━ background processes (logs to files) ━━━
-    PIDS=()
-    LOG_DIR="$ROOT_DIR/.logs"
-    mkdir -p "$LOG_DIR"
+  echo "Starting worker ($WORKER_LABEL)..."
+  bash -c "cd $ROOT_DIR && $WORKER_CMD" &
+  PIDS+=($!)
 
-    cleanup() {
-      echo ""
-      echo "Shutting down..."
-      for pid in "${PIDS[@]}"; do
-        kill "$pid" 2>/dev/null || true
-      done
-      wait 2>/dev/null
-      echo "Done."
-      exit 0
-    }
-    trap cleanup SIGINT SIGTERM
+  echo "Starting frontend..."
+  (cd "$ROOT_DIR/frontend" && npm run dev -- --open) &
+  PIDS+=($!)
 
-    echo "Starting Temporal dev server..."
-    temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn \
-      > "$LOG_DIR/temporal.log" 2>&1 &
-    PIDS+=($!)
+  echo ""
+  echo "======================================"
+  echo "  🌮 Déjà Vu Tacos is running!"
+  echo ""
+  echo "  Worker:     $WORKER_LABEL"
+  echo "  App:        http://localhost:5173"
+  echo "  API:        http://localhost:8000"
+  echo "  Temporal:   http://localhost:8233"
+  echo ""
+  echo "  Ctrl+C to stop all services"
+  echo "======================================"
 
-    echo "Waiting for Temporal..."
-    sleep 2
-
-    echo "Starting backend..."
-    uv run --package dejavu-tacos-backend server \
-      > "$LOG_DIR/backend.log" 2>&1 &
-    PIDS+=($!)
-
-    echo "Waiting for backend..."
-    for i in $(seq 1 15); do
-      if curl -s http://localhost:8000/api/health >/dev/null 2>&1; then
-        break
-      fi
-      sleep 1
-    done
-
-    echo "Starting worker ($WORKER_LABEL)..."
-    bash -c "cd $ROOT_DIR && $WORKER_CMD" \
-      > "$LOG_DIR/worker.log" 2>&1 &
-    PIDS+=($!)
-
-    echo "Starting frontend..."
-    (cd "$ROOT_DIR/frontend" && npm run dev -- --open) \
-      > "$LOG_DIR/frontend.log" 2>&1 &
-    PIDS+=($!)
-
-    echo ""
-    echo "======================================"
-    echo "  🌮 Déjà Vu Tacos"
-    echo ""
-    echo "  Worker:     $WORKER_LABEL"
-    echo "  App:        http://localhost:5173"
-    echo "  API:        http://localhost:8000"
-    echo "  Temporal:   http://localhost:8233"
-    echo ""
-    echo "  Ctrl+C to stop all services"
-    echo ""
-    echo "  Logs:  tail -f .logs/backend.log"
-    echo "         tail -f .logs/worker.log"
-    echo "         tail -f .logs/temporal.log"
-    echo "         tail -f .logs/frontend.log"
-    echo "======================================"
-
-    # Wait quietly
-    while true; do sleep 1; done
-  fi
+  wait
 fi
