@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 dependencies = [
     "temporalio>=1.9",
     "dejavu-tacos-backend",
+    "aiohttp>=3.9",
 ]
 
 [project.scripts]

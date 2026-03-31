@@ -13,6 +13,7 @@ from dejavu_tacos.models import (
     ArchitectureMode,
     CreateOrderRequest,
     Order,
+    OrderEvent,
     Settings,
     StepStatus,
 )
@@ -192,6 +193,26 @@ async def mark_order_ready(order_id: str):
     )
 
     return {"status": "signaled", "order_id": order_id}
+
+
+# ---------------------------------------------------------------------------
+# Internal: event push (used by external worker process)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/internal/events")
+async def push_event(event: OrderEvent):
+    """Accept SSE events from an external worker process."""
+    queue = config.event_queues.get(event.order_id)
+    if queue is None:
+        # Create queue on demand if order exists
+        if event.order_id in config.orders:
+            config.event_queues[event.order_id] = asyncio.Queue()
+            queue = config.event_queues[event.order_id]
+        else:
+            return {"status": "ignored", "reason": "unknown order"}
+    await queue.put(event.model_dump(mode="json"))
+    return {"status": "accepted"}
 
 
 # ---------------------------------------------------------------------------

@@ -8,16 +8,20 @@ Toggle between **Traditional mode** (direct service calls, no recovery) and **Te
 
 ## Quick Start
 
-**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli), [uv](https://docs.astral.sh/uv/), [Node.js](https://nodejs.org/)
+**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli), [uv](https://docs.astral.sh/uv/), [Node.js](https://nodejs.org/), [tmux](https://github.com/tmux/tmux)
 
 ```bash
-./scripts/start.sh
+./scripts/start.sh           # Python worker (default)
+./scripts/start.sh java      # Java worker (coming soon)
+./scripts/start.sh go        # Go worker (coming soon)
 ```
 
-This launches everything:
+This launches a tmux session with four panes — Temporal server, backend API, worker, and frontend:
 - **App:** http://localhost:5173
 - **API:** http://localhost:8000
 - **Temporal UI:** http://localhost:8233
+
+The worker runs in its own pane so you can kill it (`Ctrl+C`) to demo Temporal's recovery — restart it and watch the workflow resume exactly where it left off.
 
 ## The Demo
 
@@ -97,13 +101,13 @@ The workflow implementations are separated by language so additional SDK flavors
 # Install dependencies
 uv sync && cd frontend && npm install
 
-# Run individual services (for development)
-temporal server start-dev --db-filename temporal.db   # Temporal on :7233
-uv run --package dejavu-tacos-backend server           # FastAPI on :8000
-uv run --package dejavu-workflows worker               # Temporal worker
-cd frontend && npm run dev                             # Vite on :5173
+# Run individual services
+temporal server start-dev --db-filename temporal.db                    # Temporal on :7233
+uv run --package dejavu-tacos-backend server                           # FastAPI on :8000
+DEJAVU_BACKEND_URL=http://localhost:8000 uv run --package dejavu-workflows worker  # Worker (separate process)
+cd frontend && npm run dev                                             # Vite on :5173
 
-# Combined backend + worker (required for SSE events from workflows)
+# Or combined backend + worker in one process (simpler, no env var needed)
 uv run --package dejavu-workflows demo
 ```
 
