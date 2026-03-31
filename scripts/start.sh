@@ -116,15 +116,15 @@ if [ "$MODE" = "docker" ]; then
   echo "  Temporal:   http://localhost:8233"
   echo ""
   echo "  Ctrl+C to stop everything"
-  echo "  docker compose logs -f    (view logs)"
-  echo "  docker compose restart worker-python"
-  echo "                    (demo worker recovery)"
+  echo ""
+  echo "  Logs:  docker compose logs -f"
+  echo "         docker compose logs -f worker-python"
+  echo "  Recovery demo:"
+  echo "         docker compose restart worker-python"
   echo "======================================"
 
-  # Follow logs so Ctrl+C works
-  docker compose logs -f &
-  PIDS+=($!)
-  wait
+  # Wait quietly — Ctrl+C triggers cleanup
+  while true; do sleep 1; done
 
 # ═══════════════════════════════════════════
 #  Local mode (tmux or background processes)
@@ -177,8 +177,10 @@ else
     tmux attach -t "$SESSION"
 
   else
-    # ━━━ background processes ━━━
+    # ━━━ background processes (logs to files) ━━━
     PIDS=()
+    LOG_DIR="$ROOT_DIR/.logs"
+    mkdir -p "$LOG_DIR"
 
     cleanup() {
       echo ""
@@ -193,14 +195,16 @@ else
     trap cleanup SIGINT SIGTERM
 
     echo "Starting Temporal dev server..."
-    temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn &
+    temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn \
+      > "$LOG_DIR/temporal.log" 2>&1 &
     PIDS+=($!)
 
     echo "Waiting for Temporal..."
     sleep 2
 
     echo "Starting backend..."
-    uv run --package dejavu-tacos-backend server &
+    uv run --package dejavu-tacos-backend server \
+      > "$LOG_DIR/backend.log" 2>&1 &
     PIDS+=($!)
 
     echo "Waiting for backend..."
@@ -212,11 +216,13 @@ else
     done
 
     echo "Starting worker ($WORKER_LABEL)..."
-    bash -c "cd $ROOT_DIR && $WORKER_CMD" &
+    bash -c "cd $ROOT_DIR && $WORKER_CMD" \
+      > "$LOG_DIR/worker.log" 2>&1 &
     PIDS+=($!)
 
     echo "Starting frontend..."
-    (cd "$ROOT_DIR/frontend" && npm run dev -- --open) &
+    (cd "$ROOT_DIR/frontend" && npm run dev -- --open) \
+      > "$LOG_DIR/frontend.log" 2>&1 &
     PIDS+=($!)
 
     echo ""
@@ -229,8 +235,14 @@ else
     echo "  Temporal:   http://localhost:8233"
     echo ""
     echo "  Ctrl+C to stop all services"
+    echo ""
+    echo "  Logs:  tail -f .logs/backend.log"
+    echo "         tail -f .logs/worker.log"
+    echo "         tail -f .logs/temporal.log"
+    echo "         tail -f .logs/frontend.log"
     echo "======================================"
 
-    wait
+    # Wait quietly
+    while true; do sleep 1; done
   fi
 fi
