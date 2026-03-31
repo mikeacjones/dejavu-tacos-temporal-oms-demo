@@ -21,7 +21,7 @@ Open http://localhost:5173.
 
 ### Option B: Local
 
-**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli), [uv](https://docs.astral.sh/uv/), [Node.js](https://nodejs.org/), [tmux](https://github.com/tmux/tmux)
+**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli), [uv](https://docs.astral.sh/uv/), [Node.js](https://nodejs.org/) (optional: [tmux](https://github.com/tmux/tmux) for split-pane mode)
 
 ```bash
 ./scripts/start.sh           # Python worker (default)
