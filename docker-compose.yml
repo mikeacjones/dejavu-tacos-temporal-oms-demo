@@ -2,6 +2,7 @@
 # Start it first: temporal server start-dev
 #
 # Then: docker compose up --build
+# Or:   docker compose --profile go up --build  (Go worker instead of Python)
 
 services:
   # ── Backend API (FastAPI) ──
@@ -16,7 +17,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
-  # ── Worker (Python — default) ──
+  # ── Worker (Python — default, no profile needed) ──
   worker-python:
     build:
       context: .
@@ -28,6 +29,21 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       - backend
+
+  # ── Worker (Go) ──
+  worker-go:
+    build:
+      context: .
+      dockerfile: docker/worker-go.Dockerfile
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - DEJAVU_BACKEND_URL=http://backend:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - backend
+    profiles:
+      - go
 
   # ── Worker (Java — future) ──
   # worker-java:

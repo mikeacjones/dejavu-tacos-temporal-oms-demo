@@ -48,7 +48,7 @@ case "$LANG" in
     WORKER_LABEL="Java"
     ;;
   go)
-    WORKER_CMD="echo 'Go worker not yet implemented' && sleep infinity"
+    WORKER_CMD="cd $ROOT_DIR/workflows/go && DEJAVU_BACKEND_URL=http://localhost:8000 go run ./cmd/worker/"
     WORKER_LABEL="Go"
     ;;
   dotnet)
@@ -101,21 +101,34 @@ done
 if [ "$MODE" = "docker" ]; then
 # ═══════════════════════════════════════════
 
-  echo "Starting Docker containers..."
-  docker compose up --build -d
+  # Stop the default Python worker if using a different language
+  DOCKER_PROFILE=""
+  WORKER_SERVICE="worker-python"
+  if [ "$LANG" != "python" ]; then
+    DOCKER_PROFILE="--profile $LANG"
+    WORKER_SERVICE="worker-$LANG"
+  fi
+
+  echo "Starting Docker containers ($WORKER_LABEL worker)..."
+  docker compose $DOCKER_PROFILE up --build -d
+  # If using a non-default worker, stop the default Python one
+  if [ "$LANG" != "python" ]; then
+    docker compose stop worker-python 2>/dev/null || true
+  fi
 
   echo ""
   echo "======================================"
   echo "  🌮 Déjà Vu Tacos is running!"
   echo ""
+  echo "  Worker:     $WORKER_LABEL"
   echo "  App:        http://localhost:5173"
   echo "  API:        http://localhost:8000"
   echo "  Temporal:   http://localhost:8233"
   echo ""
   echo "  Ctrl+C to stop everything"
   echo ""
-  echo "  docker compose logs -f worker-python"
-  echo "  docker compose restart worker-python"
+  echo "  docker compose logs -f $WORKER_SERVICE"
+  echo "  docker compose restart $WORKER_SERVICE"
   echo "======================================"
 
   # Wait quietly
