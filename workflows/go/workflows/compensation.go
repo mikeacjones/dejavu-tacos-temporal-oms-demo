@@ -22,6 +22,12 @@ func (c *Compensations) AddCompensation(activity interface{}, args ...interface{
 	})
 }
 
+// AddCompensationFunc registers a custom compensation closure.
+// Use this when compensation inputs depend on values computed after registration.
+func (c *Compensations) AddCompensationFunc(fn func(ctx workflow.Context) error) {
+	c.comps = append(c.comps, fn)
+}
+
 // Compensate runs all registered compensations in reverse order.
 // Uses a disconnected context so compensations execute even if
 // the workflow is cancelled.

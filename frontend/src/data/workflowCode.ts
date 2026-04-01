@@ -141,7 +141,7 @@ const pythonCompensation: CodeLine[] = [
     indent: 3,
     step: "release_payment_hold",
   },
-  { text: "await comp()", indent: 3, step: "release_payment_hold" },
+  { text: "await comp()", indent: 4, step: "release_payment_hold" },
 ];
 
 const pythonHighlighting = [
@@ -163,6 +163,18 @@ const pythonHighlighting = [
 // ─── Go ──────────────────────────────────────────────────────────
 
 const goCode: CodeLine[] = [
+  { text: "type Compensations []any", indent: 0 },
+
+  {
+    text: "func (s *Compensations) AddCompensation(activity any) {",
+    indent: 0,
+  },
+  { text: "*s = append(*s, activity)", indent: 1 },
+  {
+    text: "}",
+    indent: 0,
+  },
+  { text: "", indent: 0 },
   { text: "func OrderWorkflow(ctx workflow.Context,", indent: 0 },
   { text: "    order OrderInput) (result Result, err error) {", indent: 0 },
   { text: "", indent: 0, isBlank: true },

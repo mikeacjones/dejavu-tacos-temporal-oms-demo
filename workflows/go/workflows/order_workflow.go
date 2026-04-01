@@ -81,10 +81,15 @@ func OrderWorkflow(ctx workflow.Context, orderInput map[string]interface{}) (res
 
 	// Step 3: Authorize Payment
 	// Register compensation BEFORE executing — the hold may be placed
-	// even if the activity response is lost.
+	// even if the activity response is lost. Use a closure so it captures
+	// authorizationID by reference (set after the activity returns).
 	status = "authorizing_payment"
 	var authorizationID string
-	compensations.AddCompensation("ReleasePaymentHold", input)
+	compensations.AddCompensationFunc(func(compCtx workflow.Context) error {
+		compInput := input
+		compInput.AuthorizationID = authorizationID
+		return workflow.ExecuteActivity(compCtx, "ReleasePaymentHold", compInput).Get(compCtx, nil)
+	})
 
 	var paymentResult map[string]interface{}
 	if err = workflow.ExecuteActivity(defaultCtx, "AuthorizePayment", input).Get(ctx, &paymentResult); err != nil {
