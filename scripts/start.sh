@@ -84,6 +84,11 @@ echo "  🌮 Déjà Vu Tacos Demo Launcher"
 echo "======================================"
 echo ""
 
+# ── Clean up stale containers from previous runs ──
+if [ "$MODE" = "docker" ]; then
+  docker compose down --remove-orphans 2>/dev/null || true
+fi
+
 # ── Start Temporal dev server (always on host) ──
 echo "Starting Temporal dev server..."
 temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn &
