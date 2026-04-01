@@ -68,7 +68,7 @@ cleanup() {
   echo ""
   echo "Shutting down..."
   if [ "$MODE" = "docker" ]; then
-    docker compose down 2>/dev/null || true
+    docker compose --profile "$LANG" down --remove-orphans 2>/dev/null || true
   fi
   for pid in "${PIDS[@]}"; do
     kill "$pid" 2>/dev/null || true
@@ -86,12 +86,12 @@ echo ""
 
 # ── Clean up stale containers from previous runs ──
 if [ "$MODE" = "docker" ]; then
-  docker compose down --remove-orphans 2>/dev/null || true
+  docker compose --profile "$LANG" down --remove-orphans 2>/dev/null || true
 fi
 
 # ── Start Temporal dev server (always on host) ──
 echo "Starting Temporal dev server..."
-temporal server start-dev --db-filename "$ROOT_DIR/temporal.db" --log-level warn &
+temporal server start-dev --log-level warn &
 PIDS+=($!)
 
 echo "Waiting for Temporal..."
