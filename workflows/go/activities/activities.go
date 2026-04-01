@@ -151,7 +151,12 @@ func (a *Activities) CapturePayment(ctx context.Context, input OrderInput) (map[
 }
 
 // ReleasePaymentHold releases a payment hold (compensation).
+// Must be idempotent — may be called even if the hold was never placed.
 func (a *Activities) ReleasePaymentHold(ctx context.Context, input OrderInput) (map[string]interface{}, error) {
+	if input.AuthorizationID == "" {
+		// Hold was never placed — nothing to release
+		return map[string]interface{}{"status": "no_hold"}, nil
+	}
 	a.emit(ctx, input.OrderID, "release_payment_hold", "running")
 	time.Sleep(300 * time.Millisecond)
 	a.emit(ctx, input.OrderID, "release_payment_hold", "completed",

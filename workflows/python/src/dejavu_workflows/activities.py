@@ -234,9 +234,14 @@ async def capture_payment_activity(order_input: dict) -> dict:
 
 @activity.defn
 async def release_payment_hold_activity(order_input: dict) -> dict:
+    """Release a payment hold (compensation). Idempotent — safe to call
+    even if the hold was never placed."""
     order_id = order_input["order_id"]
-    authorization_id = order_input["authorization_id"]
+    authorization_id = order_input.get("authorization_id", "")
     amount = order_input["total"]
+    if not authorization_id:
+        # Hold was never placed — nothing to release
+        return {"status": "no_hold"}
     await _emit_event(
         order_id, "release_payment_hold", StepStatus.RUNNING, mode=MODE
     )
