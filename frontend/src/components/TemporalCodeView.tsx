@@ -54,12 +54,7 @@ function escapeHtml(s: string): string {
 export function TemporalCodeView({ events, finalStatus, language }: Props) {
   const lang = getLanguageDef(language)
 
-  const showCompensation = events.some(
-    (e) => e.step === 'release_payment_hold' || e.step === 'notify_customer_failure'
-  )
-  const allCode = showCompensation
-    ? [...lang.code, ...lang.compensation]
-    : lang.code
+  const allCode = [...lang.code, ...lang.compensation]
 
   return (
     <div className="h-full flex flex-col">
