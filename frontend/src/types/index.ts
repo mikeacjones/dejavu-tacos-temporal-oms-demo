@@ -1,12 +1,14 @@
 export type ArchitectureMode = 'traditional' | 'temporal'
 export type FailureScenario = 'none' | 'store_connectivity' | 'payment_error' | 'random_chaos'
 export type PresentationMode = 'simple' | 'detailed'
+export type WorkerLanguage = 'python' | 'go' | 'java' | 'dotnet' | 'typescript'
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'retrying'
 
 export interface Settings {
   mode: ArchitectureMode
   failure_scenario: FailureScenario
   presentation_mode: PresentationMode
+  worker_language: WorkerLanguage
 }
 
 export interface MenuItem {

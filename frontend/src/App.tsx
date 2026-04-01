@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS: Settings = {
   mode: 'temporal',
   failure_scenario: 'store_connectivity',
   presentation_mode: 'detailed',
+  worker_language: 'python',
 }
 
 function App() {
@@ -33,17 +34,21 @@ function App() {
   useEffect(() => {
     fetch('/api/settings')
       .then((r) => r.json())
-      .then(setSettings)
+      .then((backendSettings) => {
+        setSettings((prev) => ({ ...prev, ...backendSettings }))
+      })
       .catch(() => {})
   }, [])
 
   const handleSaveSettings = useCallback(
     async (newSettings: Settings) => {
       setSettings(newSettings)
+      // Send only backend-relevant settings (worker_language is frontend-only)
+      const { worker_language: _, ...backendSettings } = newSettings
       await fetch('/api/settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newSettings),
+        body: JSON.stringify(backendSettings),
       })
       // Reset order state when settings change
       setOrderId(null)
@@ -213,7 +218,7 @@ function App() {
               {settings.mode === 'traditional' ? (
                 <TraditionalArchDiagram events={events} finalStatus={finalStatus} />
               ) : (
-                <TemporalCodeView events={events} finalStatus={finalStatus} />
+                <TemporalCodeView events={events} finalStatus={finalStatus} language={settings.worker_language} />
               )}
             </div>
           </div>

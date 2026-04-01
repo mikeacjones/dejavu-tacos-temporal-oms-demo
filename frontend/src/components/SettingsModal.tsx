@@ -1,4 +1,5 @@
-import type { ArchitectureMode, FailureScenario, PresentationMode, Settings } from '../types'
+import type { ArchitectureMode, FailureScenario, PresentationMode, Settings, WorkerLanguage } from '../types'
+import { WORKFLOW_LANGUAGES } from '../data/workflowCode'
 
 interface SettingsModalProps {
   open: boolean
@@ -136,6 +137,27 @@ export function SettingsModal({ open, onClose, settings, onSave }: SettingsModal
                 description="Show retries, error messages, and payloads"
                 color="blue"
               />
+            </div>
+          </div>
+
+          {/* Worker Language */}
+          <div>
+            <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider mb-3">
+              Worker Language
+            </h3>
+            <div className="space-y-2">
+              {WORKFLOW_LANGUAGES.map((lang) => (
+                <RadioOption
+                  key={lang.id}
+                  name="language"
+                  value={lang.id}
+                  checked={settings.worker_language === lang.id}
+                  onChange={(v) => handleChange('worker_language', v as WorkerLanguage)}
+                  label={lang.label}
+                  description={lang.filename}
+                  color="blue"
+                />
+              ))}
             </div>
           </div>
         </div>
