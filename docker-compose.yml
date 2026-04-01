@@ -1,8 +1,8 @@
 # Temporal dev server runs locally via CLI (not containerized).
 # Start it first: temporal server start-dev
 #
-# Then: docker compose up --build
-# Or:   docker compose --profile go up --build  (Go worker instead of Python)
+# Then: docker compose --profile python up --build
+# Or:   docker compose --profile go up --build
 
 services:
   # ── Backend API (FastAPI) ──
@@ -24,7 +24,7 @@ services:
       retries: 10
       start_period: 5s
 
-  # ── Worker (Python — default, no profile needed) ──
+  # ── Worker (Python) ──
   worker-python:
     build:
       context: .
@@ -37,6 +37,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    profiles:
+      - python
 
   # ── Worker (Go) ──
   worker-go:

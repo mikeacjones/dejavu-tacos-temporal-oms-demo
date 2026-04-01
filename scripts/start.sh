@@ -106,20 +106,8 @@ done
 if [ "$MODE" = "docker" ]; then
 # ═══════════════════════════════════════════
 
-  # Stop the default Python worker if using a different language
-  DOCKER_PROFILE=""
-  WORKER_SERVICE="worker-python"
-  if [ "$LANG" != "python" ]; then
-    DOCKER_PROFILE="--profile $LANG"
-    WORKER_SERVICE="worker-$LANG"
-  fi
-
   echo "Starting Docker containers ($WORKER_LABEL worker)..."
-  DEJAVU_WORKER_LANGUAGE="$LANG" docker compose $DOCKER_PROFILE up --build -d
-  # If using a non-default worker, stop the default Python one
-  if [ "$LANG" != "python" ]; then
-    docker compose stop worker-python 2>/dev/null || true
-  fi
+  DEJAVU_WORKER_LANGUAGE="$LANG" docker compose --profile "$LANG" up --build -d
 
   echo ""
   echo "======================================"
@@ -132,8 +120,8 @@ if [ "$MODE" = "docker" ]; then
   echo ""
   echo "  Ctrl+C to stop everything"
   echo ""
-  echo "  docker compose logs -f $WORKER_SERVICE"
-  echo "  docker compose restart $WORKER_SERVICE"
+  echo "  docker compose logs -f worker-$LANG"
+  echo "  docker compose restart worker-$LANG"
   echo "======================================"
 
   # Wait quietly
