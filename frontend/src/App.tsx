@@ -32,12 +32,17 @@ function App() {
 
   // Load settings from backend on mount
   useEffect(() => {
-    fetch('/api/settings')
-      .then((r) => r.json())
-      .then((backendSettings) => {
-        setSettings((prev) => ({ ...prev, ...backendSettings }))
-      })
-      .catch(() => {})
+    // Load backend settings + detected worker language
+    Promise.all([
+      fetch('/api/settings').then((r) => r.json()),
+      fetch('/api/worker-language').then((r) => r.json()).catch(() => ({ language: 'python' })),
+    ]).then(([backendSettings, langData]) => {
+      setSettings((prev) => ({
+        ...prev,
+        ...backendSettings,
+        worker_language: langData.language || 'python',
+      }))
+    }).catch(() => {})
   }, [])
 
   const handleSaveSettings = useCallback(

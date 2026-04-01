@@ -110,7 +110,7 @@ if [ "$MODE" = "docker" ]; then
   fi
 
   echo "Starting Docker containers ($WORKER_LABEL worker)..."
-  docker compose $DOCKER_PROFILE up --build -d
+  DEJAVU_WORKER_LANGUAGE="$LANG" docker compose $DOCKER_PROFILE up --build -d
   # If using a non-default worker, stop the default Python one
   if [ "$LANG" != "python" ]; then
     docker compose stop worker-python 2>/dev/null || true
@@ -143,7 +143,7 @@ else
   (cd frontend && npm install --silent 2>/dev/null) || (cd frontend && npm install)
 
   echo "Starting backend..."
-  uv run --package dejavu-tacos-backend server &
+  DEJAVU_WORKER_LANGUAGE="$LANG" uv run --package dejavu-tacos-backend server &
   PIDS+=($!)
 
   echo "Waiting for backend..."

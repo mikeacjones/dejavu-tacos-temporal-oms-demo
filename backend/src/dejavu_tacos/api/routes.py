@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from uuid import uuid4
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -55,6 +56,12 @@ async def get_temporal_client():
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/worker-language")
+async def worker_language():
+    lang = os.environ.get("DEJAVU_WORKER_LANGUAGE", "python")
+    return {"language": lang}
 
 
 @app.get("/api/menu")
