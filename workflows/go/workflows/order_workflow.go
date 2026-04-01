@@ -13,9 +13,8 @@ const TaskQueue = "dejavu-tacos"
 
 // OrderWorkflow orchestrates the order processing pipeline.
 // Registered as "OrderWorkflow" to match the Python backend's string-based start.
-func OrderWorkflow(ctx workflow.Context, orderInput map[string]interface{}) (map[string]interface{}, error) {
+func OrderWorkflow(ctx workflow.Context, orderInput map[string]interface{}) (result map[string]interface{}, err error) {
 	logger := workflow.GetLogger(ctx)
-
 	orderID, _ := orderInput["order_id"].(string)
 
 	// Build typed input from the generic map
@@ -53,73 +52,50 @@ func OrderWorkflow(ctx workflow.Context, orderInput map[string]interface{}) (map
 		return status, nil
 	})
 
-	// Saga compensation stack — register before each side-effecting step
-	type compensation struct {
-		name string
-		fn   func(workflow.Context) error
-	}
-	var compensations []compensation
+	// Saga compensation — defer runs on any error return
+	var compensations Compensations
+	defer func() {
+		if err != nil {
+			logger.Error("Order failed, running compensations", "order_id", orderID, "error", err)
+			status = "compensating"
+			compensations.Compensate(ctx)
 
-	runCompensations := func() {
-		disconnectedCtx, _ := workflow.NewDisconnectedContext(ctx)
-		compCtx := workflow.WithActivityOptions(disconnectedCtx, workflow.ActivityOptions{
-			StartToCloseTimeout: 10 * time.Second,
-			RetryPolicy: &temporal.RetryPolicy{
-				MaximumAttempts: 5,
-			},
-		})
-		for i := len(compensations) - 1; i >= 0; i-- {
-			c := compensations[i]
-			if err := c.fn(compCtx); err != nil {
-				logger.Error("Compensation failed", "name", c.name, "error", err)
-			}
+			status = "failed"
+			notifyFailure(ctx, input)
+			result = map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}
+			err = nil // swallow the error — we handled it
 		}
-	}
-
-	var authorizationID string
+	}()
 
 	// Step 1: Validate Order
 	status = "validating_order"
-	if err := workflow.ExecuteActivity(defaultCtx, "ValidateOrder", input).Get(ctx, nil); err != nil {
-		status = "failed"
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(defaultCtx, "ValidateOrder", input).Get(ctx, nil); err != nil {
+		return
 	}
 
 	// Step 2: Validate Store
 	status = "validating_store"
-	if err := workflow.ExecuteActivity(defaultCtx, "ValidateStore", input).Get(ctx, nil); err != nil {
-		status = "failed"
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(defaultCtx, "ValidateStore", input).Get(ctx, nil); err != nil {
+		return
 	}
 
-	// Step 3: Authorize Payment — register compensation BEFORE executing
+	// Step 3: Authorize Payment
+	// Register compensation BEFORE executing — the hold may be placed
+	// even if the activity response is lost.
 	status = "authorizing_payment"
-	compensations = append(compensations, compensation{
-		name: "release_payment",
-		fn: func(compCtx workflow.Context) error {
-			compInput := input
-			compInput.AuthorizationID = authorizationID
-			return workflow.ExecuteActivity(compCtx, "ReleasePaymentHold", compInput).Get(compCtx, nil)
-		},
-	})
+	var authorizationID string
+	compensations.AddCompensation("ReleasePaymentHold", input)
 
 	var paymentResult map[string]interface{}
-	if err := workflow.ExecuteActivity(defaultCtx, "AuthorizePayment", input).Get(ctx, &paymentResult); err != nil {
-		logger.Error("Payment authorization failed", "error", err)
-		runCompensations()
-		status = "failed"
-		notifyFailure(ctx, input)
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(defaultCtx, "AuthorizePayment", input).Get(ctx, &paymentResult); err != nil {
+		return
 	}
 	authorizationID, _ = paymentResult["authorization_id"].(string)
 
 	// Step 4: Clear Cart
 	status = "clearing_cart"
-	if err := workflow.ExecuteActivity(defaultCtx, "ClearCart", input).Get(ctx, nil); err != nil {
-		runCompensations()
-		status = "failed"
-		notifyFailure(ctx, input)
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(defaultCtx, "ClearCart", input).Get(ctx, nil); err != nil {
+		return
 	}
 
 	// Step 5: Submit to Store — generous retry policy
@@ -133,37 +109,27 @@ func OrderWorkflow(ctx workflow.Context, orderInput map[string]interface{}) (map
 			MaximumAttempts:    10,
 		},
 	})
-	if err := workflow.ExecuteActivity(submitCtx, "SubmitToStore", input).Get(ctx, nil); err != nil {
-		logger.Error("Store submission failed permanently", "error", err)
-		runCompensations()
-		status = "failed"
-		notifyFailure(ctx, input)
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(submitCtx, "SubmitToStore", input).Get(ctx, nil); err != nil {
+		return
 	}
 
 	// Step 6: Wait for order ready signal (human in the loop)
 	status = "preparing"
-	if err := workflow.Await(ctx, func() bool { return orderReady }); err != nil {
-		runCompensations()
-		status = "failed"
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.Await(ctx, func() bool { return orderReady }); err != nil {
+		return
 	}
 
 	// Step 7: Capture Payment
 	status = "capturing_payment"
 	captureInput := input
 	captureInput.AuthorizationID = authorizationID
-	if err := workflow.ExecuteActivity(defaultCtx, "CapturePayment", captureInput).Get(ctx, nil); err != nil {
-		runCompensations()
-		status = "failed"
-		notifyFailure(ctx, input)
-		return map[string]interface{}{"success": false, "error": err.Error(), "order_id": orderID}, nil
+	if err = workflow.ExecuteActivity(defaultCtx, "CapturePayment", captureInput).Get(ctx, nil); err != nil {
+		return
 	}
 
-	// Notify customer of success
+	// Success
 	status = "completed"
 	notifySuccess(ctx, input)
-
 	return map[string]interface{}{"success": true, "order_id": orderID}, nil
 }
 
