@@ -72,20 +72,21 @@ services:
     profiles:
       - typescript
 
-  # ── Worker (Java — future) ──
-  # worker-java:
-  #   build:
-  #     context: .
-  #     dockerfile: workflows/java/Dockerfile
-  #   environment:
-  #     - TEMPORAL_ADDRESS=host.docker.internal:7233
-  #     - DEJAVU_BACKEND_URL=http://backend:8000
-  #   extra_hosts:
-  #     - "host.docker.internal:host-gateway"
-  #   depends_on:
-  #     - backend
-  #   profiles:
-  #     - java
+  # ── Worker (Java) ──
+  worker-java:
+    build:
+      context: .
+      dockerfile: docker/worker-java.Dockerfile
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - DEJAVU_BACKEND_URL=http://backend:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - java
 
   # ── Frontend (nginx + static build) ──
   frontend:
