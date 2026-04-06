@@ -56,6 +56,22 @@ services:
     profiles:
       - go
 
+  # ── Worker (TypeScript) ──
+  worker-typescript:
+    build:
+      context: .
+      dockerfile: docker/worker-typescript.Dockerfile
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - DEJAVU_BACKEND_URL=http://backend:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - typescript
+
   # ── Worker (Java — future) ──
   # worker-java:
   #   build:

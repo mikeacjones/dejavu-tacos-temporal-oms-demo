@@ -317,6 +317,120 @@ const goHighlighting = [
   { pattern: /\b(\d+)\b/g, className: "text-cyan-300" },
 ];
 
+// ─── TypeScript ─────────────────────────────────────────────────
+
+const typescriptCode: CodeLine[] = [
+  { text: "const acts = proxyActivities<Activities>({", indent: 0 },
+  { text: "  startToCloseTimeout: '10s',", indent: 0 },
+  { text: "  retry: { maximumAttempts: 3 } })", indent: 0 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "export async function OrderWorkflow(", indent: 0 },
+  { text: "  order: OrderInput): Promise<Result> {", indent: 0 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "let orderReady = false", indent: 1 },
+  { text: "setHandler(orderReadySignal,", indent: 1 },
+  { text: "  () => { orderReady = true })", indent: 1 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "const compensations: Compensation[] = []", indent: 1 },
+  { text: "try {", indent: 1 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Validate the order and store", indent: 2, isComment: true },
+  { text: "await acts.validateOrder(order)", indent: 2, step: "validate_order" },
+  { text: "await acts.validateStore(order)", indent: 2, step: "validate_store" },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Hold payment — register compensation first",
+    indent: 2,
+    isComment: true,
+  },
+  {
+    text: "compensations.push(() =>",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  {
+    text: "  acts.releasePaymentHold(order))",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  {
+    text: "const auth = await acts.authorizePayment(",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  { text: "  order)", indent: 2, step: "authorize_payment" },
+  { text: "", indent: 0, isBlank: true },
+  { text: "await acts.clearCart(order)", indent: 2, step: "clear_cart" },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Submit — retries automatically", indent: 2, isComment: true },
+  {
+    text: "await submitActs.submitToStore(order)",
+    indent: 2,
+    step: "submit_to_store",
+  },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Wait for signal — human in the loop",
+    indent: 2,
+    isComment: true,
+  },
+  { text: "await condition(() => orderReady)", indent: 2, step: "order_ready" },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Capture only after confirmation",
+    indent: 2,
+    isComment: true,
+  },
+  { text: "await acts.capturePayment(auth)", indent: 2, step: "capture_payment" },
+];
+
+const typescriptCompensation: CodeLine[] = [
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Saga: run compensations in reverse",
+    indent: 1,
+    isComment: true,
+  },
+  { text: "} catch (err) {", indent: 1 },
+  {
+    text: "  await CancellationScope.nonCancellable(",
+    indent: 1,
+  },
+  { text: "    async () => {", indent: 1 },
+  {
+    text: "      for (const comp of compensations.reverse())",
+    indent: 1,
+    step: "release_payment_hold",
+  },
+  { text: "        await comp()", indent: 1, step: "release_payment_hold" },
+  { text: "  })", indent: 1 },
+  { text: "}", indent: 1 },
+];
+
+const typescriptHighlighting = [
+  {
+    pattern:
+      /\b(const|let|async|function|await|return|for|of|try|catch|export|throw|new)\b/g,
+    className: "text-purple-400 font-semibold",
+  },
+  {
+    pattern:
+      /\b(proxyActivities|CancellationScope|condition|setHandler|defineSignal|defineQuery)\b/g,
+    className: "text-blue-300",
+  },
+  {
+    pattern:
+      /(validateOrder|validateStore|authorizePayment|clearCart|submitToStore|capturePayment|releasePaymentHold|notifyCustomer|nonCancellable|compensations|reverse|orderReady|orderReadySignal)\b/g,
+    className: "text-amber-300",
+  },
+  {
+    pattern: /\b(Activities|OrderInput|Result|Compensation|Promise)\b/g,
+    className: "text-green-300",
+  },
+  { pattern: /'[^']*'/g, className: "text-green-300" },
+  { pattern: /\b(\d+)\b/g, className: "text-cyan-300" },
+];
+
 // ─── Java (stub) ─────────────────────────────────────────────────
 
 const javaCode: CodeLine[] = [
@@ -359,6 +473,14 @@ export const WORKFLOW_LANGUAGES: LanguageDef[] = [
     code: goCode,
     compensation: goCompensation,
     highlighting: goHighlighting,
+  },
+  {
+    id: "typescript",
+    label: "TypeScript",
+    filename: "workflows.ts",
+    code: typescriptCode,
+    compensation: typescriptCompensation,
+    highlighting: typescriptHighlighting,
   },
   {
     id: "java",

@@ -1,0 +1,18 @@
+{
+  "name": "dejavu-workflows-typescript",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc",
+    "start": "node lib/worker.js"
+  },
+  "dependencies": {
+    "@temporalio/activity": "^1.11",
+    "@temporalio/client": "^1.11",
+    "@temporalio/worker": "^1.11",
+    "@temporalio/workflow": "^1.11"
+  },
+  "devDependencies": {
+    "typescript": "^5.5"
+  }
+}

@@ -3,7 +3,7 @@ set -e
 
 # Déjà Vu Tacos — Demo Launcher
 # Usage: ./scripts/start.sh [language]
-#   language: python (default), java, go, dotnet
+#   language: python (default), go, typescript, java, dotnet
 #
 # Prefers Docker for backend/worker/frontend.
 # Falls back to running everything locally if Docker isn't available.
@@ -51,12 +51,16 @@ case "$LANG" in
     WORKER_CMD="cd $ROOT_DIR/workflows/go && DEJAVU_BACKEND_URL=http://localhost:8000 go run ./cmd/worker/"
     WORKER_LABEL="Go"
     ;;
+  typescript)
+    WORKER_CMD="cd $ROOT_DIR/workflows/typescript && npm install --silent && npm run build && DEJAVU_BACKEND_URL=http://localhost:8000 node lib/worker.js"
+    WORKER_LABEL="TypeScript"
+    ;;
   dotnet)
     WORKER_CMD="echo '.NET worker not yet implemented' && sleep infinity"
     WORKER_LABEL=".NET"
     ;;
   *)
-    echo "Unknown language: $LANG (supported: python, java, go, dotnet)"
+    echo "Unknown language: $LANG (supported: python, go, typescript, java, dotnet)"
     exit 1
     ;;
 esac
