@@ -88,6 +88,22 @@ services:
     profiles:
       - java
 
+  # ── Worker (.NET) ──
+  worker-dotnet:
+    build:
+      context: .
+      dockerfile: docker/worker-dotnet.Dockerfile
+    environment:
+      - TEMPORAL_ADDRESS=host.docker.internal:7233
+      - DEJAVU_BACKEND_URL=http://backend:8000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      backend:
+        condition: service_healthy
+    profiles:
+      - dotnet
+
   # ── Frontend (nginx + static build) ──
   frontend:
     build:

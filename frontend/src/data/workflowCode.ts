@@ -537,6 +537,166 @@ const javaHighlighting = [
   { pattern: /\b(true|false|null)\b/g, className: "text-cyan-300" },
 ];
 
+// ─── .NET (C#) ──────────────────────────────────────────────────
+
+const dotnetCode: CodeLine[] = [
+  { text: "[Workflow(\"OrderWorkflow\")]", indent: 0, isDecorator: true },
+  { text: "public class OrderWorkflow {", indent: 0 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "[WorkflowRun]", indent: 1, isDecorator: true },
+  { text: "public async Task<Result> RunAsync(", indent: 1 },
+  { text: "    OrderInput order) {", indent: 1 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "var compensations = new List<Func<Task>>()", indent: 2 },
+  { text: "try {", indent: 2 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Validate the order and store", indent: 3, isComment: true },
+  {
+    text: "await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "validate_order",
+  },
+  {
+    text: "  (a) => a.ValidateOrder(order), options)",
+    indent: 3,
+    step: "validate_order",
+  },
+  {
+    text: "await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "validate_store",
+  },
+  {
+    text: "  (a) => a.ValidateStore(order), options)",
+    indent: 3,
+    step: "validate_store",
+  },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Hold payment — register compensation first",
+    indent: 3,
+    isComment: true,
+  },
+  {
+    text: "compensations.Add(() =>",
+    indent: 3,
+    step: "authorize_payment",
+  },
+  {
+    text: "  ExecuteActivityAsync(",
+    indent: 3,
+    step: "authorize_payment",
+  },
+  {
+    text: "    (a) => a.ReleasePaymentHold(order)))",
+    indent: 3,
+    step: "authorize_payment",
+  },
+  {
+    text: "var auth = await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "authorize_payment",
+  },
+  {
+    text: "  (a) => a.AuthorizePayment(order), options)",
+    indent: 3,
+    step: "authorize_payment",
+  },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "clear_cart",
+  },
+  {
+    text: "  (a) => a.ClearCart(order), options)",
+    indent: 3,
+    step: "clear_cart",
+  },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Submit — retries automatically", indent: 3, isComment: true },
+  {
+    text: "await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "submit_to_store",
+  },
+  {
+    text: "  (a) => a.SubmitToStore(order), submitOpts)",
+    indent: 3,
+    step: "submit_to_store",
+  },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Wait for signal — human in the loop",
+    indent: 3,
+    isComment: true,
+  },
+  {
+    text: "await Workflow.WaitConditionAsync(",
+    indent: 3,
+    step: "order_ready",
+  },
+  { text: "  () => orderReady)", indent: 3, step: "order_ready" },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Capture only after confirmation", indent: 3, isComment: true },
+  {
+    text: "await Workflow.ExecuteActivityAsync(",
+    indent: 3,
+    step: "capture_payment",
+  },
+  {
+    text: "  (a) => a.CapturePayment(auth), options)",
+    indent: 3,
+    step: "capture_payment",
+  },
+];
+
+const dotnetCompensation: CodeLine[] = [
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Saga: run compensations in reverse",
+    indent: 2,
+    isComment: true,
+  },
+  { text: "} catch (Exception) {", indent: 2 },
+  {
+    text: "  for (var i = compensations.Count - 1; i >= 0; i--)",
+    indent: 2,
+    step: "release_payment_hold",
+  },
+  {
+    text: "    await compensations[i]()",
+    indent: 2,
+    step: "release_payment_hold",
+  },
+  { text: "}", indent: 2 },
+];
+
+const dotnetHighlighting = [
+  {
+    pattern:
+      /\b(public|class|async|await|var|new|try|catch|return|for|int)\b/g,
+    className: "text-purple-400 font-semibold",
+  },
+  {
+    pattern:
+      /\b(Workflow|Task|List|Func|ActivityOptions|RetryPolicy)\b/g,
+    className: "text-blue-300",
+  },
+  {
+    pattern:
+      /(ValidateOrder|ValidateStore|AuthorizePayment|ClearCart|SubmitToStore|CapturePayment|ReleasePaymentHold|NotifyCustomer|ExecuteActivityAsync|WaitConditionAsync|Add|compensations|orderReady)\b/g,
+    className: "text-amber-300",
+  },
+  {
+    pattern: /\b(OrderInput|OrderWorkflow|Result|Exception)\b/g,
+    className: "text-green-300",
+  },
+  { pattern: /\[.*?\]/g, className: "text-yellow-400" },
+  { pattern: /\b(\d+)\b/g, className: "text-cyan-300" },
+  { pattern: /\b(true|false|null)\b/g, className: "text-cyan-300" },
+];
+
 // ─── Registry ────────────────────────────────────────────────────
 
 export const WORKFLOW_LANGUAGES: LanguageDef[] = [
@@ -571,6 +731,14 @@ export const WORKFLOW_LANGUAGES: LanguageDef[] = [
     code: javaCode,
     compensation: javaCompensation,
     highlighting: javaHighlighting,
+  },
+  {
+    id: "dotnet",
+    label: "C# (.NET)",
+    filename: "OrderWorkflow.cs",
+    code: dotnetCode,
+    compensation: dotnetCompensation,
+    highlighting: dotnetHighlighting,
   },
 ];
 
