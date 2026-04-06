@@ -8,11 +8,14 @@ Toggle between **Traditional mode** (direct service calls, no recovery) and **Te
 
 ## Quick Start
 
-**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli) + either Docker or ([uv](https://docs.astral.sh/uv/) + [Node.js](https://nodejs.org/))
+**Prerequisites:** [Temporal CLI](https://docs.temporal.io/cli) + either Docker or the language-specific toolchain for local mode.
 
 ```bash
-./scripts/start.sh           # Python worker (default)
-./scripts/start.sh go        # Go worker
+./scripts/start.sh              # Python worker (default)
+./scripts/start.sh go           # Go worker
+./scripts/start.sh typescript   # TypeScript worker
+./scripts/start.sh java         # Java worker
+./scripts/start.sh dotnet       # .NET (C#) worker
 ```
 
 The script auto-detects your environment:
@@ -66,7 +69,7 @@ Click the gear icon to configure:
 - **Architecture Mode**: Traditional (fragile) vs Temporal (durable)
 - **Failure Scenario**: Store connectivity (default), payment error, random chaos, or none
 - **Presentation Mode**: Simple (high-level) vs Detailed (retries, payloads, error messages)
-- **Worker Language**: Python, Go (the code view updates to match)
+- **Worker Language**: Python, Go, TypeScript, Java, C# (the code view updates to match)
 
 ## Architecture
 
@@ -80,7 +83,7 @@ FastAPI Backend (Python)
            ↕
 Temporal Dev Server (CLI, on host)
            ↕
-Worker (Python or Go — swappable)
+Worker (Python, Go, TypeScript, Java, or .NET — swappable)
     ├── OrderWorkflow (saga compensation, signals, queries)
     └── Activities → Backend internal API
 ```
@@ -89,16 +92,19 @@ The worker runs as a separate process from the backend. Activities call the back
 
 ## Multi-Language Support
 
-The same workflow is implemented in multiple languages. The backend is decoupled from the worker — it starts workflows and sends signals by string name, so any language's worker can be swapped in.
+The same workflow is implemented in five languages. The backend is decoupled from the worker — it starts workflows and sends signals by string name, so any language's worker can be swapped in.
 
-| Language | Status | Run with |
+| Language | Run with | Saga Pattern |
 |---|---|---|
-| Python | Available | `./scripts/start.sh` or `./scripts/start.sh python` |
-| Go | Available | `./scripts/start.sh go` |
-| Java | Planned | — |
-| .NET | Planned | — |
+| Python | `./scripts/start.sh python` | Manual compensation list + `asyncio.shield` |
+| Go | `./scripts/start.sh go` | `Compensations` struct + `NewDisconnectedContext` |
+| TypeScript | `./scripts/start.sh typescript` | Manual compensation list + `CancellationScope.nonCancellable()` |
+| Java | `./scripts/start.sh java` | SDK's built-in `Saga` class (first-class support) |
+| .NET (C#) | `./scripts/start.sh dotnet` | Manual compensation list with try/catch |
 
-The code view in the UI auto-detects the active worker language. To add a new language, implement the workflow and activities, then add a code definition in `frontend/src/data/workflowCode.ts`.
+All workers implement the same flow: validate → authorize payment → clear cart → submit to store → wait for ready signal → capture payment. Same task queue (`dejavu-tacos`), same signal names, same compensation behavior.
+
+The code view in the UI auto-detects the active worker language. To add a new language, see [Adding a New Language](#adding-a-new-language).
 
 ## Project Structure
 
@@ -107,13 +113,38 @@ The code view in the UI auto-detects the active worker language. To add a new la
 │   └── src/data/         # Language-specific code definitions for the code viewer
 ├── backend/              # FastAPI + mock services (always Python)
 ├── workflows/
-│   ├── python/           # Python worker — OrderWorkflow + activities
-│   ├── go/               # Go worker — same workflow, same task queue
-│   ├── java/             # Future
-│   └── dotnet/           # Future
+│   ├── python/           # Python worker — temporalio SDK
+│   ├── go/               # Go worker — go.temporal.io/sdk
+│   ├── typescript/       # TypeScript worker — @temporalio/* packages
+│   ├── java/             # Java worker — io.temporal:temporal-sdk
+│   └── dotnet/           # .NET worker — Temporalio NuGet package
 ├── docker/               # Dockerfiles + nginx config
 ├── docker-compose.yml    # Container orchestration (one profile per language)
 └── scripts/start.sh      # One-command launcher
+```
+
+## Running with Docker
+
+```bash
+# Start with a specific worker language
+DEJAVU_WORKER_LANGUAGE=go docker compose --profile go up --build
+
+# Or use the launch script (handles Temporal dev server too)
+./scripts/start.sh typescript
+```
+
+Docker Compose profiles: `python`, `go`, `typescript`, `java`, `dotnet`. Only the selected worker starts.
+
+## Running Locally
+
+The launch script falls back to local mode if Docker isn't available:
+
+```bash
+./scripts/start.sh python       # needs: uv, npm, temporal
+./scripts/start.sh go           # needs: go, npm, temporal
+./scripts/start.sh typescript   # needs: node/npm, temporal
+./scripts/start.sh java         # needs: gradle, jdk 17+, npm, temporal
+./scripts/start.sh dotnet       # needs: dotnet 8+, npm, temporal
 ```
 
 ## Development
@@ -127,10 +158,10 @@ temporal server start-dev                                                       
 uv run --package dejavu-tacos-backend server                                     # FastAPI on :8000
 DEJAVU_BACKEND_URL=http://localhost:8000 uv run --package dejavu-workflows worker # Python worker
 cd workflows/go && DEJAVU_BACKEND_URL=http://localhost:8000 go run ./cmd/worker/ # Go worker
+cd workflows/typescript && npm run build && DEJAVU_BACKEND_URL=http://localhost:8000 node lib/worker.js
+cd workflows/java && DEJAVU_BACKEND_URL=http://localhost:8000 gradle run
+cd workflows/dotnet && DEJAVU_BACKEND_URL=http://localhost:8000 dotnet run
 cd frontend && npm run dev                                                       # Vite on :5173
-
-# Or combined backend + Python worker in one process (simpler, no env var needed)
-uv run --package dejavu-workflows demo
 ```
 
 ## Order Flow
@@ -144,3 +175,12 @@ uv run --package dejavu-workflows demo
 7. **Capture Payment** — charge only after store confirms
 
 **Compensation (saga pattern):** If store submission fails permanently, the workflow automatically releases the payment hold and notifies the customer. No manual intervention needed.
+
+## Adding a New Language
+
+1. Implement the workflow in `workflows/<lang>/` — same activity event names, same task queue
+2. Add code definition in `frontend/src/data/workflowCode.ts` (code lines, compensation lines, syntax highlighting)
+3. Add a Dockerfile in `docker/worker-<lang>.Dockerfile`
+4. Add a profile in `docker-compose.yml`
+5. Add a case in `scripts/start.sh`
+6. Add to `WorkerLanguage` type in `frontend/src/types/index.ts`
