@@ -44,7 +44,7 @@ case "$LANG" in
     WORKER_LABEL="Python"
     ;;
   java)
-    WORKER_CMD="echo 'Java worker not yet implemented' && sleep infinity"
+    WORKER_CMD="cd $ROOT_DIR/workflows/java && DEJAVU_BACKEND_URL=http://localhost:8000 gradle run --quiet --console=plain"
     WORKER_LABEL="Java"
     ;;
   go)

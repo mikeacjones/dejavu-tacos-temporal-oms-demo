@@ -431,28 +431,110 @@ const typescriptHighlighting = [
   { pattern: /\b(\d+)\b/g, className: "text-cyan-300" },
 ];
 
-// ─── Java (stub) ─────────────────────────────────────────────────
+// ─── Java ───────────────────────────────────────────────────────
+// Java SDK has first-class Saga support via the Saga class.
 
 const javaCode: CodeLine[] = [
-  { text: "@WorkflowInterface", indent: 0, isDecorator: true },
-  { text: "public interface OrderWorkflow {", indent: 0 },
-  { text: "  @WorkflowMethod", indent: 1, isDecorator: true },
-  { text: "  Result run(OrderInput order);", indent: 1 },
-  { text: "}", indent: 0 },
+  { text: "OrderActivities acts = Workflow.newActivityStub(", indent: 0 },
+  { text: "    OrderActivities.class, defaultOptions)", indent: 0 },
   { text: "", indent: 0, isBlank: true },
-  { text: "// Coming soon...", indent: 0, isComment: true },
+  { text: "public Map<String, Object> run(", indent: 0 },
+  { text: "    Map<String, Object> order) {", indent: 0 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Built-in Saga manages compensations", indent: 1, isComment: true },
+  { text: "Saga saga = new Saga(new Saga.Options.Builder()", indent: 1 },
+  { text: "    .setContinueWithError(true).build())", indent: 1 },
+  { text: "try {", indent: 1 },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Validate the order and store", indent: 2, isComment: true },
+  { text: "acts.validateOrder(order)", indent: 2, step: "validate_order" },
+  { text: "acts.validateStore(order)", indent: 2, step: "validate_store" },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Hold payment — register compensation first",
+    indent: 2,
+    isComment: true,
+  },
+  {
+    text: "saga.addCompensation(() ->",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  {
+    text: "    acts.releasePaymentHold(order))",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  {
+    text: "auth = acts.authorizePayment(order)",
+    indent: 2,
+    step: "authorize_payment",
+  },
+  { text: "", indent: 0, isBlank: true },
+  { text: "acts.clearCart(order)", indent: 2, step: "clear_cart" },
+  { text: "", indent: 0, isBlank: true },
+  { text: "// Submit — retries automatically", indent: 2, isComment: true },
+  {
+    text: "submitActs.submitToStore(order)",
+    indent: 2,
+    step: "submit_to_store",
+  },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Wait for signal — human in the loop",
+    indent: 2,
+    isComment: true,
+  },
+  { text: "Workflow.await(() -> orderReady)", indent: 2, step: "order_ready" },
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Capture only after confirmation",
+    indent: 2,
+    isComment: true,
+  },
+  { text: "acts.capturePayment(auth)", indent: 2, step: "capture_payment" },
+];
+
+const javaCompensation: CodeLine[] = [
+  { text: "", indent: 0, isBlank: true },
+  {
+    text: "// Saga.compensate() runs in reverse,",
+    indent: 1,
+    isComment: true,
+  },
+  {
+    text: "// inside a detached cancellation scope",
+    indent: 1,
+    isComment: true,
+  },
+  { text: "} catch (Exception e) {", indent: 1 },
+  { text: "    saga.compensate()", indent: 1, step: "release_payment_hold" },
+  { text: "}", indent: 1 },
 ];
 
 const javaHighlighting = [
   {
-    pattern: /\b(public|interface|void)\b/g,
+    pattern:
+      /\b(public|class|interface|void|new|try|catch|return|Map|String|Object)\b/g,
     className: "text-purple-400 font-semibold",
   },
-  { pattern: /@\w+/g, className: "text-yellow-400" },
   {
-    pattern: /\b(OrderWorkflow|Result|OrderInput)\b/g,
+    pattern: /\b(Workflow|Saga|OrderActivities|ActivityOptions|RetryOptions)\b/g,
     className: "text-blue-300",
   },
+  {
+    pattern:
+      /(validateOrder|validateStore|authorizePayment|clearCart|submitToStore|capturePayment|releasePaymentHold|notifyCustomer|addCompensation|compensate|await|newActivityStub|orderReady)\b/g,
+    className: "text-amber-300",
+  },
+  {
+    pattern:
+      /\b(OrderInput|Options|Builder)\b/g,
+    className: "text-green-300",
+  },
+  { pattern: /@\w+/g, className: "text-yellow-400" },
+  { pattern: /\b(\d+)\b/g, className: "text-cyan-300" },
+  { pattern: /\b(true|false|null)\b/g, className: "text-cyan-300" },
 ];
 
 // ─── Registry ────────────────────────────────────────────────────
@@ -485,9 +567,9 @@ export const WORKFLOW_LANGUAGES: LanguageDef[] = [
   {
     id: "java",
     label: "Java",
-    filename: "OrderWorkflow.java",
+    filename: "OrderWorkflowImpl.java",
     code: javaCode,
-    compensation: [],
+    compensation: javaCompensation,
     highlighting: javaHighlighting,
   },
 ];
