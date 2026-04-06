@@ -56,7 +56,7 @@ case "$LANG" in
     WORKER_LABEL="TypeScript"
     ;;
   dotnet)
-    WORKER_CMD="echo '.NET worker not yet implemented' && sleep infinity"
+    WORKER_CMD="cd $ROOT_DIR/workflows/dotnet && DEJAVU_BACKEND_URL=http://localhost:8000 dotnet run -c Release"
     WORKER_LABEL=".NET"
     ;;
   *)
